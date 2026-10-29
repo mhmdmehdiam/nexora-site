@@ -1,0 +1,445 @@
+// Nexora — Multi-tenant SaaS Platform Schema (PostgreSQL production-ready)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== TENANT (Business/Organization) =====
+model Business {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique   // e.g. "shop-ali"
+  logo            String?
+  phone           String?
+  email           String?
+  address         String?
+  city            String?
+  website         String?
+  industry        String?  // e.g. "retail", "electronics", "food"
+  plan            String   @default("free")  // free, pro, enterprise
+  planExpiresAt   DateTime?
+  isActive        Boolean  @default(true)
+  locale          String   @default("fa")    // fa, en
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+  customers       Customer[]
+  products        Product[]
+  sales           Sale[]
+  invoices        Invoice[]
+  smsMessages     SmsMessage[]
+  reminders       PaymentReminder[]
+  activities      ActivityLog[]
+  subscriptions   Subscription[]
+  payments        Payment[]
+
+  @@index([isActive, plan])
+  @@index([slug])
+}
+
+// ===== USERS =====
+model User {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  email       String
+  password    String?  // null for Google-only accounts
+  googleId    String?  // Google account subject (`sub`) when linked
+  role        String   @default("owner") // owner, admin, manager, user
+  avatar      String?
+  phone       String?
+  isActive    Boolean  @default(true)
+  /// Bumped whenever every existing session must be invalidated (password change,
+  /// forced sign-out). The JWT carries the value it was issued with.
+  tokenVersion Int     @default(0)
+  emailVerifiedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sales       Sale[]
+  payments    Payment[]
+  activities  ActivityLog[]
+  reminders   PaymentReminder[] @relation("ReminderCreator")
+  resetTokens PasswordResetToken[]
+
+  @@unique([businessId, email])
+  @@index([businessId, isActive])
+  @@index([googleId])
+  @@index([email])
+}
+
+// ===== CUSTOMERS =====
+model Customer {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  notes       String?
+  tags        String?
+  totalSpent  Float    @default(0)
+  lastPurchase DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sales       Sale[]
+  invoices    Invoice[]
+  smsMessages SmsMessage[]
+  reminders   PaymentReminder[] @relation("ReminderCustomer")
+
+  @@index([businessId, isActive])
+  @@index([businessId, name])
+  @@index([businessId, phone])
+  @@index([businessId, createdAt])
+}
+
+// ===== PRODUCTS =====
+model Product {
+  id            String   @id @default(cuid())
+  businessId    String
+  name          String
+  sku           String?
+  description   String?
+  category      String?
+  price         Float    @default(0)
+  cost          Float    @default(0)
+  stock         Int      @default(0)
+  minStock      Int      @default(0)
+  unit          String   @default("عدد")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  saleItems     SaleItem[]
+  invoiceItems  InvoiceItem[]
+
+  @@unique([businessId, sku])
+  @@index([businessId, isActive])
+  @@index([businessId, category])
+  @@index([businessId, name])
+}
+
+// ===== SALES =====
+model Sale {
+  id            String   @id @default(cuid())
+  businessId    String
+  invoiceNumber String
+  customerId    String
+  userId        String
+  totalAmount   Float    @default(0)
+  discount      Float    @default(0)
+  tax           Float    @default(0)
+  finalAmount   Float    @default(0)
+  paidAmount    Float    @default(0)
+  status        String   @default("pending")
+  paymentMethod String?
+  notes         String?
+  saleDate      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer @relation(fields: [customerId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+  items         SaleItem[]
+  invoice       Invoice?
+
+  @@unique([businessId, invoiceNumber])
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, status, saleDate])
+  @@index([businessId, saleDate])
+  @@index([businessId, customerId])
+  @@index([customerId])
+}
+
+model SaleItem {
+  id          String @id @default(cuid())
+  saleId      String
+  productId   String
+  quantity    Int
+  unitPrice   Float
+  discount    Float  @default(0)
+  total       Float
+
+  sale        Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+// ===== INVOICE NUMBER COUNTER =====
+// Atomic per-business/year sequence. Replaces the read-max-then-add-1 loop
+// that raced under concurrent writes (P2002 on the unique invoice number).
+model InvoiceCounter {
+  businessId String
+  year       Int
+  value      Int    @default(0)
+
+  @@id([businessId, year])
+}
+
+// ===== INVOICES =====
+model Invoice {
+  id            String   @id @default(cuid())
+  businessId    String
+  invoiceNumber String
+  saleId        String?  @unique
+  customerId    String
+  dueDate       DateTime
+  totalAmount   Float    @default(0)
+  paidAmount    Float    @default(0)
+  status        String   @default("unpaid")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sale          Sale?    @relation(fields: [saleId], references: [id])
+  customer      Customer @relation(fields: [customerId], references: [id])
+  items         InvoiceItem[]
+
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+  @@index([customerId])
+}
+
+model InvoiceItem {
+  id          String @id @default(cuid())
+  invoiceId   String
+  productId   String
+  description String?
+  quantity    Int
+  unitPrice   Float
+  total       Float
+
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+  @@index([productId])
+}
+
+// ===== SMS =====
+model SmsMessage {
+  id          String   @id @default(cuid())
+  businessId  String
+  customerId  String
+  phone       String
+  message     String
+  status      String   @default("pending")
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer    Customer @relation(fields: [customerId], references: [id])
+
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+}
+
+// ===== REMINDERS =====
+model PaymentReminder {
+  id          String   @id @default(cuid())
+  businessId  String
+  customerId  String
+  userId      String
+  amount      Float    @default(0)
+  description String
+  dueDate     DateTime
+  isRecurring Boolean  @default(false)
+  recurringInterval String?
+  isCompleted Boolean  @default(false)
+  isSent      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer    Customer @relation("ReminderCustomer", fields: [customerId], references: [id])
+  user        User     @relation("ReminderCreator", fields: [userId], references: [id])
+
+  @@index([businessId, isCompleted])
+  @@index([businessId, dueDate])
+  @@index([customerId])
+}
+
+// ===== ACTIVITY LOG =====
+model ActivityLog {
+  id          String   @id @default(cuid())
+  businessId  String?
+  userId      String?
+  action      String
+  entity      String
+  entityId    String?
+  details     String?
+  createdAt   DateTime @default(now())
+
+  business    Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [userId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, entity])
+}
+
+// ===== PAYMENTS =====
+model Payment {
+  id         String    @id @default(cuid())
+  businessId String
+  userId     String
+  plan       String    // pro, enterprise
+  amount     Int       // Toman, integer
+  status     String    @default("pending") // pending, paid, failed, canceled
+  gateway    String    @default("mock")   // mock, zarinpal
+  authority  String?   @unique
+  refId      String?
+  cardPan    String?
+  createdAt  DateTime  @default(now())
+  paidAt     DateTime?
+
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+  @@index([authority])
+  @@index([userId])
+}
+
+// ===== SUBSCRIPTIONS =====
+model Subscription {
+  id          String   @id @default(cuid())
+  businessId  String
+  plan        String   // free, pro, enterprise
+  amount      Float    @default(0)
+  currency    String   @default("IRR")
+  status      String   @default("active") // active, cancelled, expired
+  startDate   DateTime @default(now())
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([businessId, endDate])
+}
+
+// ===== PLATFORM SETTINGS =====
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+// ===== CMS: BLOG POSTS =====
+model Post {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  excerpt     String?
+  content     String
+  coverImage  String?
+  category    String?
+  tags        String?   // JSON array of strings
+  status      String    @default("draft") // draft, published
+  views       Int       @default(0)
+  authorName  String?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([slug])
+  @@index([category])
+}
+
+// ===== CMS: PAGES =====
+model Page {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  content   String
+  status    String   @default("draft") // draft, published
+  seoTitle  String?
+  seoDesc   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, slug])
+}
+
+// ===== CMS: MEDIA LIBRARY =====
+model Media {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String
+  mimeType  String
+  size      Int      @default(0)
+  alt       String?
+  createdAt DateTime @default(now())
+
+  @@index([mimeType])
+}
+
+// ===== CMS: NAVIGATION MENUS =====
+model MenuItem {
+  id        String   @id @default(cuid())
+  label     String
+  url       String
+  location  String   @default("header") // header, footer
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([location, isActive, order])
+}
+
+// ===== AUTH: PASSWORD RESET =====
+/// Single-use, short-lived token for the "forgot password" flow.
+/// Only the SHA-256 hash of the token is stored — a database leak must not
+/// hand out working reset links.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  ip        String?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+// ===== SECURITY: RATE LIMITING =====
+/// Shared rate-limit buckets.
+///
+/// The in-memory limiter was per-process: behind the 4-worker cluster the real
+/// ceiling was 4× the configured limit, and a restart wiped every counter. For
+/// brute-force protection that is not a limit at all — an attacker only has to
+/// spread attempts across workers. This table makes the window global and
+/// durable; the row is updated with a single atomic upsert so concurrent
+/// requests cannot both read "under limit" and both increment.
+model RateLimit {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+}

@@ -1,0 +1,139 @@
+# ==========================================
+#  BizFlow / Nexora SaaS — .gitignore
+# ==========================================
+
+# ---------- Dependencies ----------
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+jspm_packages/
+bower_components/
+
+# ---------- Build output ----------
+.next/
+.next-run/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---------- Environment & secrets ----------
+# هیچ فایل env نباید آپلود شود (توکن JWT، مسیر دیتابیس، کلیدها)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.p8
+*.pfx
+*.jks
+*.keystore
+secrets.json
+credentials.json
+
+# ---------- Database (SQLite) ----------
+# data/nexora.db is intentionally TRACKED: it ships with deployments.
+# Local journals only:
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+*.sqlite
+*.sqlite3
+
+# ---------- Logs ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---------- Testing & coverage ----------
+coverage/
+.nyc_output/
+*.lcov
+
+# ---------- Caches ----------
+.cache/
+.turbo/
+.eslintcache
+.stylelintcache
+.vercel/
+.swc/
+
+# ---------- OS files ----------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---------- Editor / IDE ----------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------- Local tooling / agent data ----------
+.claude/
+.workbuddy-ai/
+.preview/
+design-refs/
+.playwright-cli/
+
+# ---------- Uploaded media (local runtime data) ----------
+public/uploads/
+uploads/
+
+# ---------- Mobile (Expo / React Native) ----------
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/expo-env.d.ts
+mobile/.metro-health-check*
+mobile/ios/
+mobile/android/
+mobile/.kotlin/
+mobile/*.jks
+mobile/*.p8
+mobile/*.p12
+mobile/*.mobileprovision
+.jwt-secret
+
+# dedicated PostgreSQL cluster (local dev only)
+.pgdata/
+.next-prod/
+
+# database backups (never commit dumps)
+backups/
+node_modules/
+.next/
+.next-*/
+.next-build/
+.next-out/
+.next-broken/
+.next-trash-*/
+.workbuddy/
+*.genie
+.trace-test
+.env
+.env.*
+!.env.example
+
+node_modules/
+.next/

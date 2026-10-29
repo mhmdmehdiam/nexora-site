@@ -1,0 +1,414 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import * as THREE from 'three'
+
+/**
+ * WebGL particle field that lives through the WHOLE landing page.
+ * Every chapter is an ORDERED, architectural formation — rings, lattices,
+ * latitudes, spiral arms — so the cloud reads as designed structure, not
+ * noise. Each landing chapter dispatches its index; the cloud glides
+ * slowly into that chapter's signature formation (event-driven, never
+ * scroll-jumpy).
+ *
+ *   01 hero         → concentric rings
+ *   02 product      → twin orbit rings
+ *   03 features     → double helix + rungs
+ *   04 how-it-works → sine-wave lattice
+ *   05 pricing      → latitude sphere
+ *   06 testimonials → twin vertical rings
+ *   07 faq          → calm lattice plane
+ *   08 blog/cta     → triple-spiral funnel
+ */
+/* deterministic PRNG so the cloud is identical on every load */
+function mulberry32(seed: number) {
+  return () => {
+    seed |= 0
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function gauss(rand: () => number) {
+  return (rand() + rand() + rand() - 1.5) * 0.8
+}
+
+export function HeroSpace() {
+  const holderRef = useRef<HTMLDivElement>(null)
+  const [on, setOn] = useState(false)
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (!window.matchMedia('(pointer: fine)').matches) return
+    setOn(true)
+  }, [])
+
+  useEffect(() => {
+    if (!on) return
+    const holder = holderRef.current
+    if (!holder) return
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 80)
+    camera.position.z = 14
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    holder.appendChild(renderer.domElement)
+
+    /* ================================================================
+       ordered formations — one Float32Array per chapter
+       ================================================================ */
+    const COUNT = 2200
+    const TAU = Math.PI * 2
+    // tiny deterministic jitter keeps structures from looking laser-cut
+    const jit = (i: number, amp: number) => (frac(i * 0.6180339887) - 0.5) * 2 * amp
+    function frac(x: number) {
+      return x - Math.floor(x)
+    }
+
+    const F: Float32Array[] = []
+    const put = (a: Float32Array, i: number, x: number, y: number, z: number, j = 0.14) => {
+      a[i * 3] = x + jit(i * 3 + 1, j)
+      a[i * 3 + 1] = y + jit(i * 3 + 2, j)
+      a[i * 3 + 2] = z + jit(i * 3 + 3, j)
+    }
+
+    // deterministic PRNG — the cloud is identical on every load
+    const rand = mulberry32(20261023)
+
+    // 01 — concentric rings (hero)
+    {
+      const a = new Float32Array(COUNT * 3)
+      const radii = [4.5, 7, 9.5, 12, 14.5]
+      const sum = radii.reduce((s, r) => s + r, 0)
+      let i = 0
+      radii.forEach((R, ring) => {
+        const cnt = Math.floor((R / sum) * COUNT)
+        for (let j = 0; j < cnt && i < COUNT; j++, i++) {
+          const ang = (j / cnt) * TAU + ring * 0.5
+          put(a, i, Math.cos(ang) * R, ring * 0.45 - 0.9, Math.sin(ang) * R, 0.16)
+        }
+      })
+      while (i < COUNT) {
+        // leftovers land on the innermost ring
+        const ang = (i / COUNT) * TAU
+        put(a, i, Math.cos(ang) * radii[0], -0.9, Math.sin(ang) * radii[0], 0.16)
+        i++
+      }
+      F.push(a)
+    }
+    // 02 — twin orbit rings around the product
+    {
+      const a = new Float32Array(COUNT * 3)
+      for (let i = 0; i < COUNT; i++) {
+        const half = i % 2
+        const R = half ? 11.8 : 9.4
+        const ang = (i / COUNT) * TAU + half * (Math.PI / 2)
+        put(a, i, Math.cos(ang) * R, half ? 0.5 : -0.5, Math.sin(ang) * R, 0.12)
+      }
+      F.push(a)
+    }
+    // 03 — double helix + rungs
+    {
+      const a = new Float32Array(COUNT * 3)
+      const TURNS = 3
+      for (let i = 0; i < COUNT; i++) {
+        const bucket = i % 10
+        if (bucket < 4 || bucket === 4) {
+          // strand A (45%)
+          const u = frac(i * 0.7919)
+          const t = u * TURNS * TAU
+          put(a, i, Math.cos(t) * 6.5, (u - 0.5) * 15, Math.sin(t) * 6.5, 0.1)
+        } else if (bucket < 9) {
+          // strand B (45%)
+          const u = frac(i * 0.7919 + 0.5)
+          const t = u * TURNS * TAU
+          put(a, i, Math.cos(t + Math.PI) * 6.5, (u - 0.5) * 15, Math.sin(t + Math.PI) * 6.5, 0.1)
+        } else {
+          // rungs (10%) — straight connectors between the strands
+          const steps = 22
+          const k = Math.floor(frac(i * 0.3557) * steps)
+          const u = k / steps
+          const t = u * TURNS * TAU
+          const s = frac(i * 0.618) // position along the rung, 0..1
+          const ax = Math.cos(t) * 6.5
+          const az = Math.sin(t) * 6.5
+          const bx = Math.cos(t + Math.PI) * 6.5
+          const bz = Math.sin(t + Math.PI) * 6.5
+          put(
+            a,
+            i,
+            ax + (bx - ax) * s,
+            (u - 0.5) * 15,
+            az + (bz - az) * s,
+            0.06
+          )
+        }
+      }
+      F.push(a)
+    }
+    // 04 — sine-wave lattice (ordered grid, waving heights)
+    {
+      const a = new Float32Array(COUNT * 3)
+      const cols = 50
+      const rows = Math.ceil(COUNT / cols)
+      for (let i = 0; i < COUNT; i++) {
+        const col = i % cols
+        const row = Math.floor(i / cols)
+        const x = (col - (cols - 1) / 2) * 0.56
+        const z = (row - (rows - 1) / 2) * 0.56
+        put(a, i, x, Math.sin(x * 0.5) * Math.cos(z * 0.42) * 1.6, z, 0.05)
+      }
+      F.push(a)
+    }
+    // 05 — latitude sphere (ordered rings top→bottom)
+    {
+      const a = new Float32Array(COUNT * 3)
+      const R = 9.5
+      const lats = 15
+      let i = 0
+      for (let l = 0; l < lats; l++) {
+        const lat = (-60 + (120 * l) / (lats - 1)) * (Math.PI / 180)
+        const ringR = R * Math.cos(lat)
+        const y = R * Math.sin(lat)
+        const cnt = Math.max(8, Math.floor(Math.cos(lat) * (COUNT / lats) * 1.9))
+        for (let j = 0; j < cnt && i < COUNT; j++, i++) {
+          const ang = (j / cnt) * TAU + l * 0.35
+          put(a, i, Math.cos(ang) * ringR, y, Math.sin(ang) * ringR, 0.12)
+        }
+      }
+      while (i < COUNT) {
+        put(a, i, Math.cos(i) * R * 0.35, R * 0.95, Math.sin(i) * R * 0.35, 0.12)
+        i++
+      }
+      F.push(a)
+    }
+    // 06 — twin vertical rings (two communities facing each other)
+    {
+      const a = new Float32Array(COUNT * 3)
+      for (let i = 0; i < COUNT; i++) {
+        const side = i % 2 ? 1 : -1
+        const ang = (i / COUNT) * TAU
+        put(a, i, side * 6.2, Math.cos(ang) * 5.6, Math.sin(ang) * 5.6, 0.12)
+      }
+      F.push(a)
+    }
+    // 07 — calm lattice plane
+    {
+      const a = new Float32Array(COUNT * 3)
+      const cols = 44
+      const rows = 50 // exactly 2200
+      for (let i = 0; i < COUNT; i++) {
+        const col = i % cols
+        const row = Math.floor(i / cols)
+        put(a, i, (col - (cols - 1) / 2) * 0.88, 0, (row - (rows - 1) / 2) * 0.88, 0.05)
+      }
+      F.push(a)
+    }
+    // 08 — spiral galaxy (blog / journal)
+    {
+      const a = new Float32Array(COUNT * 3)
+      const arms = 2
+      const per = Math.floor(COUNT / arms)
+      for (let i = 0; i < COUNT; i++) {
+        const arm = i % arms
+        const u = Math.floor(i / arms) / per
+        const turns = 2.6
+        const ang = u * turns * TAU + (arm * TAU) / arms
+        const r = 1.2 + u * 11
+        put(a, i, Math.cos(ang) * r, gauss(rand) * (1.6 - u), Math.sin(ang) * r, 0.08)
+      }
+      F.push(a)
+    }
+    // 09 — triple-spiral funnel (the pull)
+    {
+      const a = new Float32Array(COUNT * 3)
+      const per = Math.floor(COUNT / 3)
+      for (let i = 0; i < COUNT; i++) {
+        const arm = i % 3
+        const u = Math.floor(i / 3) / per
+        const turns = 4.5
+        const ang = u * turns * TAU + (arm * TAU) / 3
+        const r = 1.6 + u * 13
+        put(a, i, Math.cos(ang) * r, 1.2 - u * 3.2, Math.sin(ang) * r, 0.1)
+      }
+      F.push(a)
+    }
+
+    // hero + finale stay bright; every content chapter (02–07) is heavily
+    // dimmed so particles never compete with text
+    const CHAPTER_OPACITY = [0.8, 0.45, 0.4, 0.45, 0.38, 0.45, 0.35, 0.5, 0.85]
+    const CHAPTER_COLOR = [
+      new THREE.Color('#c9b79c'),
+      new THREE.Color('#d3c2a4'),
+      new THREE.Color('#dcc9a8'),
+      new THREE.Color('#cfc0a2'),
+      new THREE.Color('#c2b394'),
+      new THREE.Color('#d9c9ab'),
+      new THREE.Color('#a89a80'),
+      new THREE.Color('#cfc0a2'),
+      new THREE.Color('#f0e6d2'),
+    ]
+
+    /* ================================================================
+       geometry
+       ================================================================ */
+    const positions = new Float32Array(F[0])
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+
+    const mat = new THREE.PointsMaterial({
+      color: new THREE.Color(CHAPTER_COLOR[0]),
+      size: 0.045,
+      transparent: true,
+      opacity: CHAPTER_OPACITY[0],
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    })
+    const points = new THREE.Points(geo, mat)
+    scene.add(points)
+
+    // warm-white dust layer for depth
+    const COUNT2 = 420
+    const pos2 = new Float32Array(COUNT2 * 3)
+    for (let i = 0; i < COUNT2 * 3; i++) pos2[i] = frac(i * 0.7548776662) * 48 - 24
+    const geo2 = new THREE.BufferGeometry()
+    geo2.setAttribute('position', new THREE.BufferAttribute(pos2, 3))
+    const mat2 = new THREE.PointsMaterial({
+      color: new THREE.Color('#f7f5f0'),
+      size: 0.03,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    const dust = new THREE.Points(geo2, mat2)
+    scene.add(dust)
+
+    /* ================================================================
+       interaction + scroll-scrubbed morph
+       ================================================================ */
+    let px = 0
+    let py = 0
+    let spx = 0
+    let spy = 0
+    // active chapter (dispatched by the deck) + eased glide toward it
+    let chapter = 0
+    let blend = 0
+    let visible = true
+    let raf = 0
+
+    const onChapter = (e: Event) => {
+      const i = (e as CustomEvent<number>).detail
+      if (typeof i === 'number' && i >= 0 && i < F.length) chapter = i
+    }
+    window.addEventListener('nexora:chapter', onChapter)
+    const onMouse = (e: MouseEvent) => {
+      px = (e.clientX / window.innerWidth) * 2 - 1
+      py = (e.clientY / window.innerHeight) * 2 - 1
+    }
+    const onVis = () => {
+      visible = !document.hidden
+    }
+    const onResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+    }
+    window.addEventListener('mousemove', onMouse, { passive: true })
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('resize', onResize)
+    const clock = new THREE.Clock()
+    const tmp = new THREE.Color()
+
+
+    const loop = () => {
+      raf = requestAnimationFrame(loop)
+      if (!visible) return
+
+      const t = clock.getElapsedTime()
+      spx += (px - spx) * 0.04
+      spy += (py - spy) * 0.04
+
+      // glide toward the active chapter — a slow, calm settle (~2.5s)
+      blend += (chapter - blend) * 0.011
+      const s = blend
+      const i0 = Math.min(F.length - 1, Math.floor(s))
+      const i1 = Math.min(F.length - 1, i0 + 1)
+      const raw = Math.min(1, Math.max(0, s - i0))
+      const f = raw * raw * (3 - 2 * raw)
+
+      const A = F[i0]
+      const B = F[i1]
+      for (let i = 0; i < positions.length; i++) {
+        positions[i] = A[i] + (B[i] - A[i]) * f
+      }
+      geo.attributes.position.needsUpdate = true
+
+      mat.opacity = CHAPTER_OPACITY[i0] + (CHAPTER_OPACITY[i1] - CHAPTER_OPACITY[i0]) * f
+      mat.color.copy(tmp.lerpColors(CHAPTER_COLOR[i0], CHAPTER_COLOR[i1], f))
+
+      // harmonic symmetry: the main cloud sways equally left/right (never
+      // spins away from its composition), the dust mirrors it in counter-
+      // phase, and both breathe on a shared slow pulse.
+      points.rotation.y = Math.sin(t * 0.05) * 0.18 + spx * 0.08
+      points.rotation.x = Math.sin(t * 0.04 + Math.PI / 2) * 0.045 + spy * 0.055
+      dust.rotation.y = Math.sin(t * 0.05 + Math.PI) * 0.26 + spx * 0.04
+      mat.size = 0.045 + Math.sin(t * 0.22) * 0.003
+      mat2.opacity = (0.18 + 0.16 * mat.opacity) * (1 + Math.sin(t * 0.22) * 0.06)
+
+      camera.position.y = -blend * 0.5
+      // mid-journey the camera pulls back: formations read as a fine
+      // architectural drawing under the copy, with a slow symmetric
+      // breathing on top
+      camera.position.z = 14 + Math.sin(t * 0.03) * 0.35
+      camera.lookAt(0, camera.position.y, 0)
+
+
+      renderer.render(scene, camera)
+    }
+    raf = requestAnimationFrame(loop)
+
+    // dev/test probe: lets automated tests read the chapter state
+    if (process.env.NODE_ENV !== 'production') {
+      ;(window as any).__heroSpace = {
+        getOpacity: () => mat.opacity,
+        getColor: () => '#' + mat.color.getHexString(),
+        getBlend: () => +blend.toFixed(2),
+        getSample: () => [0, 1, 2, 3, 4].map((i) => [Math.round(positions[i * 3] * 100) / 100, Math.round(positions[i * 3 + 1] * 100) / 100]),
+      }
+    }
+
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('nexora:chapter', onChapter)
+      window.removeEventListener('mousemove', onMouse)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('resize', onResize)
+      geo.dispose()
+      geo2.dispose()
+      mat.dispose()
+      mat2.dispose()
+      renderer.dispose()
+      if (renderer.domElement.parentElement === holder) holder.removeChild(renderer.domElement)
+    }
+  }, [on])
+
+  if (!on) return null
+
+  return (
+    <>
+      <div
+        ref={holderRef}
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-10"
+        style={{ willChange: 'transform' }}
+      />
+    </>
+  )
+}

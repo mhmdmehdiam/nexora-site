@@ -1,0 +1,50 @@
+# Nexora — local PostgreSQL + PgBouncer for development
+# Run: docker compose up -d
+# Then: npx prisma migrate dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexora-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexora
+      POSTGRES_PASSWORD: nexora_dev_pass
+      POSTGRES_DB: nexora
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexora -d nexora"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # PgBouncer — connection pooler in transaction mode.
+  # This is what you use in production (Supabase Pooler, AWS RDS Proxy,
+  # or a self-managed PgBouncer). Locally we run it so dev matches prod.
+  pgbouncer:
+    image: pgbouncer/pgbouncer:1.22
+    container_name: nexora-pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASES_HOST: postgres
+      DATABASES_PORT: 5432
+      DATABASES_DATABASE: nexora
+      DATABASES_USER: nexora
+      DATABASES_PASSWORD: nexora_dev_pass
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 20
+      MIN_POOL_SIZE: 5
+      SERVER_IDLE_TIMEOUT: 600
+      SERVER_LIFETIME: 3600
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

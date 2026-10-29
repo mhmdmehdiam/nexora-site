@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<title>Nexora — Print Poster A4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700;900&family=Playfair+Display:ital,wght@1,500;1,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ============ A4 print canvas: 210mm × 297mm ============ */
+  @page { size: 210mm 297mm; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ink: #0b0b0f;
+    --ink2: #101018;
+    --sand: #c9b79c;
+    --sand-bright: #e8dcc6;
+    --white: #f7f5f0;
+    --muted: #8a8375;
+    --faint: rgba(247, 245, 240, 0.55);
+  }
+
+  html, body { width: 210mm; height: 297mm; }
+
+  body {
+    font-family: 'Vazirmatn', sans-serif;
+    background: var(--ink);
+    color: var(--white);
+    position: relative;
+    overflow: hidden;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---- backdrop: sand glows + architectural grid + hairlines ---- */
+  .bg { position: absolute; inset: 0; pointer-events: none; }
+  .bg .glow1 {
+    position: absolute; top: -18mm; right: -20mm; width: 130mm; height: 130mm;
+    background: radial-gradient(circle, rgba(201,183,156,0.20), transparent 62%);
+    border-radius: 50%;
+  }
+  .bg .glow2 {
+    position: absolute; bottom: -25mm; left: -18mm; width: 140mm; height: 140mm;
+    background: radial-gradient(circle, rgba(201,183,156,0.13), transparent 60%);
+    border-radius: 50%;
+  }
+  .bg .grid {
+    position: absolute; inset: 0; opacity: 0.5;
+    background-image:
+      linear-gradient(rgba(247,245,240,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(247,245,240,0.035) 1px, transparent 1px);
+    background-size: 9mm 9mm;
+    -webkit-mask-image: radial-gradient(ellipse 75% 62% at 55% 30%, black 10%, transparent 78%);
+            mask-image: radial-gradient(ellipse 75% 62% at 55% 30%, black 10%, transparent 78%);
+  }
+  .bg .ring {
+    position: absolute; left: 50%; top: 96mm; width: 128mm; height: 128mm;
+    transform: translateX(-50%);
+    border: 0.4mm solid rgba(201,183,156,0.16);
+    border-radius: 50%;
+  }
+  .bg .ring2 {
+    position: absolute; left: 50%; top: 100mm; width: 104mm; height: 104mm;
+    transform: translateX(-50%);
+    border: 0.3mm dashed rgba(201,183,156,0.13);
+    border-radius: 50%;
+  }
+  .bg .dot {
+    position: absolute; left: 50%; top: 96mm; width: 2.4mm; height: 2.4mm;
+    transform: translateX(-50%);
+    background: var(--sand); border-radius: 50%;
+    box-shadow: 0 0 6mm rgba(201,183,156,0.5);
+  }
+
+  .page { position: relative; z-index: 2; height: 100%; padding: 13mm 15mm 11mm; display: flex; flex-direction: column; }
+
+  /* ---- brand row ---- */
+  .brand { display: flex; align-items: center; gap: 3.5mm; }
+  .brand .dot-s { width: 1.8mm; height: 1.8mm; background: var(--sand); }
+  .brand .word {
+    font-family: 'Playfair Display', serif; font-style: italic; font-weight: 600;
+    font-size: 27pt; line-height: 1; color: var(--white); letter-spacing: 0.01em;
+  }
+  .brand .tag {
+    font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: 0.24em;
+    color: var(--muted); text-transform: uppercase; margin-top: 1mm;
+  }
+
+  /* ---- hero ---- */
+  .hero { margin-top: 13mm; }
+  .kicker {
+    display: flex; align-items: center; gap: 3mm;
+    font-family: 'JetBrains Mono', monospace; font-size: 8pt; letter-spacing: 0.22em;
+    color: var(--sand); text-transform: uppercase;
+  }
+  .kicker .line { width: 14mm; height: 0.35mm; background: rgba(201,183,156,0.5); }
+  h1 {
+    margin-top: 5.5mm;
+    font-size: 39pt; font-weight: 900; line-height: 1.22; letter-spacing: -0.02em;
+    color: var(--white);
+  }
+  h1 .accent { color: var(--sand); }
+  .sub {
+    margin-top: 5mm; max-width: 138mm;
+    font-size: 12.5pt; font-weight: 300; line-height: 2; color: var(--faint);
+  }
+  .sub b { color: var(--white); font-weight: 500; }
+
+  /* ---- feature grid ---- */
+  .features { margin-top: 11mm; display: grid; grid-template-columns: 1fr 1fr; gap: 4mm 6mm; }
+  .feat { border-top: 0.35mm solid rgba(247,245,240,0.14); padding-top: 3.6mm; }
+  .feat .num {
+    font-family: 'JetBrains Mono', monospace; font-size: 8pt; letter-spacing: 0.16em;
+    color: var(--sand);
+  }
+  .feat h3 { margin-top: 2.2mm; font-size: 13.5pt; font-weight: 700; color: var(--white); }
+  .feat p { margin-top: 1.6mm; font-size: 9.5pt; font-weight: 300; line-height: 1.85; color: var(--faint); }
+
+  /* ---- stats strip ---- */
+  .stats {
+    margin-top: 10mm; padding: 5mm 0;
+    border-top: 0.35mm solid rgba(247,245,240,0.14);
+    border-bottom: 0.35mm solid rgba(247,245,240,0.14);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .stat { text-align: center; flex: 1; }
+  .stat .v { font-size: 17pt; font-weight: 900; color: var(--sand-bright); }
+  .stat .k { margin-top: 1mm; font-size: 8.5pt; color: var(--muted); }
+
+  /* ---- CTA row: qr + promise ---- */
+  .cta { margin-top: 9mm; display: flex; align-items: center; gap: 8mm; }
+  .qr-box {
+    flex-shrink: 0; width: 34mm; height: 34mm; padding: 3mm;
+    background: #fff; border-radius: 2.5mm;
+    border: 0.4mm solid rgba(201,183,156,0.35);
+  }
+  .qr-box img { width: 100%; height: 100%; display: block; }
+  .cta-text { flex: 1; }
+  .cta-text .big { font-size: 17.5pt; font-weight: 900; color: var(--white); line-height: 1.5; }
+  .cta-text .big .accent { color: var(--sand); }
+  .cta-text .small { margin-top: 2mm; font-size: 10pt; font-weight: 300; color: var(--faint); line-height: 1.9; }
+  .cta-text .steps {
+    margin-top: 3mm; display: flex; gap: 5mm;
+    font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+  .cta-text .steps span { color: var(--sand); }
+
+  /* ---- footer ---- */
+  .footer {
+    margin-top: auto; padding-top: 4mm;
+    border-top: 0.35mm solid rgba(247,245,240,0.14);
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 7pt;
+    letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase;
+  }
+  .footer .url { color: var(--sand); font-size: 8.5pt; }
+</style>
+</head>
+<body>
+  <div class="bg">
+    <div class="glow1"></div>
+    <div class="glow2"></div>
+    <div class="grid"></div>
+    <div class="ring"></div>
+    <div class="ring2"></div>
+    <div class="dot"></div>
+  </div>
+
+  <div class="page">
+    <!-- brand -->
+    <div class="brand">
+      <span class="dot-s"></span>
+      <span class="word">Nexora</span>
+      <span class="tag">console — مدیریت هوشمند فروش</span>
+    </div>
+
+    <!-- hero -->
+    <div class="hero">
+      <div class="kicker"><span class="line"></span> برای مغازه‌ها و کسب‌وکارهای کوچک</div>
+      <h1>فروشت را <span class="accent">هوشمند</span><br />مدیریت کن.</h1>
+      <p class="sub">
+        فروش، مشتری، موجودی و فاکتور — همه از <b>یک کنسول واحد</b>، هم روی کامپیوتر هم توی جیبت.
+        هر عددی که می‌بینی زنده است.
+      </p>
+    </div>
+
+    <!-- features -->
+    <div class="features">
+      <div class="feat">
+        <div class="num">[01]</div>
+        <h3>ثبت فروش در چند ثانیه</h3>
+        <p>فاکتور بزن؛ موجودی خودش کم می‌شود و حساب مشتری به‌روز می‌ماند.</p>
+      </div>
+      <div class="feat">
+        <div class="num">[02]</div>
+        <h3>مشتری‌های وفادار</h3>
+        <p>تاریخچه‌ی خرید هر مشتری همیشه دم دست — خرید بعدی را دقیق‌تر ببند.</p>
+      </div>
+      <div class="feat">
+        <div class="num">[03]</div>
+        <h3>یادآوری پرداخت</h3>
+        <p>دیگر طلب کسی فراموش نمی‌شود؛ سررسیدها خودکار یادآوری می‌شوند.</p>
+      </div>
+      <div class="feat">
+        <div class="num">[04]</div>
+        <h3>تحلیل هوشمند فروش</h3>
+        <p>بفهم چه چیزی می‌فروشد، کِی می‌فروشد و ماه بعد چه انتظاری داشته باش.</p>
+      </div>
+    </div>
+
+    <!-- stats -->
+    <div class="stats">
+      <div class="stat"><div class="v">۲٬۰۰۰+</div><div class="k">کسب‌وکار فعال</div></div>
+      <div class="stat"><div class="v">۹۹٫۹٪</div><div class="k">آپتایم</div></div>
+      <div class="stat"><div class="v">۲۴/۷</div><div class="k">پشتیبانی</div></div>
+      <div class="stat"><div class="v">۵ دقیقه</div><div class="k">تا اولین فاکتور</div></div>
+    </div>
+
+    <!-- cta -->
+    <div class="cta">
+      <div class="qr-box">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=0&data=https%3A%2F%2Fnexora.ir" alt="nexora.ir" />
+      </div>
+      <div class="cta-text">
+        <div class="big">شروع <span class="accent">کاملاً رایگان</span> است.</div>
+        <div class="small">بدون نیاز به کارت بانکی — همین حالا کسب‌وکارت را بساز و همان روز اولین فاکتور را بزن.</div>
+        <div class="steps">
+          <div><span>۱</span> اسکن کن</div>
+          <div><span>۲</span> ثبت‌نام</div>
+          <div><span>۳</span> بفروش</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- footer -->
+    <div class="footer">
+      <span>nexora.ir — ۲۰۲۶</span>
+      <span class="url">https://nexora.ir</span>
+      <span>free to start · no card</span>
+    </div>
+  </div>
+</body>
+</html>
